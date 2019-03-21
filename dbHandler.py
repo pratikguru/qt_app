@@ -20,10 +20,12 @@ class DBHandler():
         return data
 
 
-db = DBHandler("db.txt")
-buffer = []
-buffer.append({"book":"thuke", "title":"thika","year":1997})
-buffer.append({"book":"apples", "title":"nice","year":2000})
-db.insertData(buffer)
-for x in (db.retrieveData()["data"]):
-    print (x["book"], x["title"], x["year"])
+
+if __name__ == "__main__":
+    db = DBHandler("db.txt")
+    buffer = []
+    buffer.append({"author":"thuke", "title":"thika","year":1997})
+    buffer.append({"author":"apples", "title":"nice","year":2000})
+    db.insertData(buffer)
+    for x in (db.retrieveData()["data"]):
+        print (x["author"], x["title"], x["year"])

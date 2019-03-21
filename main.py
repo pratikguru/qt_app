@@ -1,5 +1,6 @@
 import time
 import sys
+from       dbHandler       import DBHandler
 try:
     from   PyQt5             import QtCore
     from   PyQt5.QtCore    import pyqtSlot
@@ -16,6 +17,7 @@ except Exception as e:
 class BookDialog():
     def __init__(self, string, btnString):
         self.miniDialog = QDialog()
+
         self.miniDialog.setGeometry( 500, 500, 400, 300 )
         self.miniDialog.setWindowTitle(str(string))
         self.addButton    = QPushButton(str(btnString), self.miniDialog)
@@ -98,15 +100,28 @@ class App(QMainWindow):
         except Exception as e:
             print (e)
             print ("Interface.ui could not be found!")
+        self.db             = DBHandler("db.txt")
         self.rowCount       = 0
         self.selectedRow    = 0
         self.selectedColumn = 0
         self.pageCount      = 0
         self.currentPage    = 0
         self.addDialog      = BookDialog("Add Book", "Add")
+        self.makeTable()
 
+        books = []
+        rowCount = self.tableWidget.rowCount()
+        for book in self.db.retrieveData()["data"]:
+            books.append(book["author"])
+            books.append(book["title"])
+            books.append(book["year"])
+            self.tableWidget.insertRow(rowCount)
+            self.tableWidget.setRowHeight(rowCount, 75)
+            for x in range(0, 3):
+               self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(books[x])))
+            books = []
      def run(self):
-         self.makeTable()
+
          self.add_button.clicked.connect(self.addBook)
          self.edit_button.clicked.connect(self.editBook)
          self.delete_button.clicked.connect(self.deleteBook)
@@ -141,9 +156,22 @@ class App(QMainWindow):
         rowCount = self.tableWidget.rowCount()
         self.tableWidget.insertRow(rowCount)
         self.tableWidget.setRowHeight(rowCount, 75)
+        buffer = [
+            {
+                "author" : self.addDialog.author_edit.text(),
+                "title"  : self.addDialog.title_lineEdit.text(),
+                "year"   : self.addDialog.year_lineEdit.text()
+            }
+        ]
+
         for x in range(0, 3):
             self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(book[x])))
         self.rowCount = self.rowCount + 1
+        retrievedData = self.db.retrieveData()
+        for x in retrievedData["data"]:
+            buffer.append(x)
+
+        self.db.insertData(buffer)
 
      def editBook(self):
         print ("Edit book has been called.")

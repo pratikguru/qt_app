@@ -1,24 +1,14 @@
 {
     "data": [
         {
-            "author": "dfdf",
-            "title": "22323",
-            "year": "45343"
+            "book": "thuke",
+            "title": "thika",
+            "year": 1997
         },
         {
-            "author": "ritwick",
-            "title": "limpdick",
-            "year": "22323"
-        },
-        {
-            "author": "nayi",
-            "title": "jdkfjkj",
-            "year": "22323"
-        },
-        {
-            "author": "thika",
-            "title": "thul",
-            "year": "122"
+            "book": "apples",
+            "title": "nice",
+            "year": 2000
         }
     ]
 }

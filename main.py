@@ -35,6 +35,7 @@ class BookDialog():
         self.cancelled = False
         self.isMax99999 = QtGui.QRegExpValidator(QtCore.QRegExp("^[0-9]{1,5}$"))
         self.year_lineEdit.setValidator(self.isMax99999)
+
         self.initUI()
 
 
@@ -67,6 +68,7 @@ class BookDialog():
         self.author_edit.setStyleSheet(""" border-radius: 10px; """)
         self.title_lineEdit.setStyleSheet(""" border-radius:10px;""")
         self.year_lineEdit.setStyleSheet(""" border-radius:10px;""")
+
 
     def run(self):
         self.addButton.clicked.connect(self.addBookEmitSignal)
@@ -111,6 +113,7 @@ class App(QMainWindow):
 
         books = []
         rowCount = self.tableWidget.rowCount()
+
         for book in self.db.retrieveData()["data"]:
             books.append(book["author"])
             books.append(book["title"])

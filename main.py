@@ -1,6 +1,6 @@
 import time
 import sys
-from       dbHandler       import DBHandler
+from       dbHandler       import DBSql
 try:
     from   PyQt5             import QtCore
     from   PyQt5.QtCore    import pyqtSlot
@@ -102,27 +102,45 @@ class App(QMainWindow):
         except Exception as e:
             print (e)
             print ("Interface.ui could not be found!")
-        self.db             = DBHandler("db.txt")
+        #self.db             = DBHandler("db.txt")
+        self.db             = DBSql()
         self.rowCount       = 0
         self.selectedRow    = 0
         self.selectedColumn = 0
         self.pageCount      = 0
         self.currentPage    = 0
         self.addDialog      = BookDialog("Add Book", "Add")
+        self.maxRows        = 0
+        self.currentRow     = 0
+        self.lowerLimit     = 1
+        self.upperLimit     = 4
         self.makeTable()
 
-        books = []
-        rowCount = self.tableWidget.rowCount()
+        self.conn = self.db.create_connection("tester.db")
+        book = """
+                CREATE TABLE IF NOT EXISTS BOOK (
+                    AUTHOR TEXT NOT NULL,
+                    TITLE  TEXT NOT NULL,
+                    YEAR   INTEGER NOT NULL )
+               """
+        if not self.conn:
+            print ("DB Connection failure!")
+            return
 
-        for book in self.db.retrieveData()["data"]:
-            books.append(book["author"])
-            books.append(book["title"])
-            books.append(book["year"])
+        books = []
+        self.maxRows = self.db.getAll(self.conn)
+        self.denom_label.setText(str(int(len(self.maxRows) / 3)))
+        print(len(self.maxRows))
+        rows  = self.db.getAll(self.conn)
+        for count, row in enumerate(rows):
+            if count == 3:
+                return
+            rowCount = self.tableWidget.rowCount()
             self.tableWidget.insertRow(rowCount)
             self.tableWidget.setRowHeight(rowCount, 75)
-            for x in range(0, 3):
-               self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(books[x])))
-            books = []
+            for x in range(0, 4):
+                self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem( str(row[x])) )
+
      def run(self):
 
          self.add_button.clicked.connect(self.addBook)
@@ -131,6 +149,58 @@ class App(QMainWindow):
          self.filter_button.clicked.connect(self.filterBooks)
          self.clear_button.clicked.connect(self.clearFilter)
          self.tableWidget.cellClicked.connect(self.rowSelect)
+         self.previous_button.clicked.connect(self.previousPage)
+         self.next_button.clicked.connect(self.nextPage)
+
+     def nextPage(self):
+         if self.currentPage >= len(self.maxRows)/3:
+             print ("Upper limit pages reached.")
+             return
+         self.num_label.setText(str(self.currentPage))
+         y = self.currentPage * 3
+         print (((y+1), (y+3)))
+         self.upperLimit = y+1
+         self.lowerLimit = y+3
+         data =  (self.db.getRange(self.conn, ((y+1), (y+3))))
+         self.currentPage = self.currentPage + 1
+         self.tableWidget.removeRow(0)
+         self.tableWidget.removeRow(1)
+         self.tableWidget.removeRow(2)
+         self.tableWidget.removeRow(0)
+         for count, row in enumerate(data):
+             if count == 3:
+                 return
+             rowCount = self.tableWidget.rowCount()
+             self.tableWidget.insertRow(rowCount)
+             self.tableWidget.setRowHeight(rowCount, 75)
+             for x in range(0, 4):
+                 self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(row[x])))
+
+     def previousPage(self):
+        if self.currentPage <= 0:
+            print ("Lower limit page reached.")
+            return
+
+        y = self.currentPage * 3
+        print (((y-2), (y)))
+        self.upperLimit = y-2
+        self.lowerLimit = y
+        data =  (self.db.getRange(self.conn, ((y-2), (y))))
+        self.currentPage = self.currentPage - 1
+        self.num_label.setText(str(self.currentPage))
+        self.tableWidget.removeRow(0)
+        self.tableWidget.removeRow(1)
+        self.tableWidget.removeRow(2)
+        self.tableWidget.removeRow(0)
+        for count, row in enumerate(data):
+            if count == 3:
+                return
+            rowCount = self.tableWidget.rowCount()
+            self.tableWidget.insertRow(rowCount)
+            self.tableWidget.setRowHeight(rowCount, 75)
+            for x in range(0, 4):
+                self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(row[x])))
+
 
      def rowSelect(self, row, col):
         print (row, col)
@@ -138,7 +208,8 @@ class App(QMainWindow):
         self.selectedColumn = col
 
      def makeTable(self):
-        for x in range(0, 3):
+        self.tableWidget.setColumnWidth(0,50)
+        for x in range(1, 3):
             self.tableWidget.setColumnWidth(x, 315)
 
      def generateDialog(self, type):
@@ -151,40 +222,39 @@ class App(QMainWindow):
             return
         if not (self.addDialog.author_edit.text() or self.addDialog.title_lineEdit.text() or self.addDialog.year_lineEdit.text()):
             return
-        book = [
-                 str( self.addDialog.author_edit.text()   ),
-                 str( self.addDialog.title_lineEdit.text() ),
-                 str( self.addDialog.year_lineEdit.text() )
-                ]
+
         rowCount = self.tableWidget.rowCount()
-        self.tableWidget.insertRow(rowCount)
-        self.tableWidget.setRowHeight(rowCount, 75)
-        buffer = [
-            {
-                "author" : self.addDialog.author_edit.text(),
-                "title"  : self.addDialog.title_lineEdit.text(),
-                "year"   : self.addDialog.year_lineEdit.text()
-            }
-        ]
+        if not rowCount == 0:
+            print ("Rows: " + str(rowCount))
+            lastRowId = self.tableWidget.item(rowCount-1, 0).text()
+        else: lastRowId = 0
+        book = [
+                 str( int(lastRowId) + 1 ),
+                 str( self.addDialog.author_edit.text()    ),
+                 str( self.addDialog.title_lineEdit.text() ),
+                 str( self.addDialog.year_lineEdit.text()  )
+               ]
+        print (self.db.addBook(self.conn, (book[1], book[2], book[3])))
+        if (self.tableWidget.rowCount() < 3):
 
-        for x in range(0, 3):
-            self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(book[x])))
-        self.rowCount = self.rowCount + 1
-        retrievedData = self.db.retrieveData()
-        for x in retrievedData["data"]:
-            buffer.append(x)
+            rowCount = self.tableWidget.rowCount()
 
-        self.db.insertData(buffer)
+            self.tableWidget.insertRow(rowCount)
+            self.tableWidget.setRowHeight(rowCount, 75)
+            for x in range(0, 4):
+                self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(book[x])))
+        self.maxRows = self.db.getAll( self.conn )
+        self.denom_label.setText(str(int(len(self.maxRows) / 3)))
 
      def editBook(self):
         print ("Edit book has been called.")
 
 
-
      def deleteBook(self):
          print ("Delete book has been called.")
-         self.tableWidget.removeRow( self.selectedRow )
-
+         rowToBeDeleted =  (self.tableWidget.item(self.selectedRow, 0).text())
+         self.db.deleteBook(self.conn, (str(rowToBeDeleted)))
+         self.tableWidget.removeRow(self.selectedRow)
      def filterBooks(self):
          print ("Filter book has been called.")
 

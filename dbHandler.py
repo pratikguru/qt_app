@@ -8,7 +8,7 @@ from sqlite3 import Error
 class DBHandler():
     def __init__(self, fileName):
         self.fileName = fileName
-
+        
     def insertData(self,buffer):
         with open("db.txt", 'w+', encoding = "utf-8", ) as file:
             message = {}
@@ -42,32 +42,80 @@ class DBSql():
 
     def addBook(self, conn, book):
         sql = """
-                INSERT INTO BOOK(BOOK_ID, AUTHOR, TITLE, YEAR)
-                VALUES(?,?,?,?)
+                INSERT INTO BOOK (AUTHOR,TITLE,YEAR) VALUES(?,?,?)
                 """
         cur = conn.cursor()
-        cur.execute(sql, book)
+        print (cur.execute(sql, book))
+        conn.commit()
         return cur.lastrowid
 
+    def deleteBook(self, conn, id):
+        sql = "DELETE FROM BOOK where rowid=?"
+        cur = conn.cursor()
+        cur.execute(sql, id)
+        conn.commit()
+        return cur.lastrowid
+
+    def editAuthor(self, conn, edit):
+        sql = """UPDATE BOOK
+                 SET AUTHOR=?
+                 WHERE rowid=?;"""
+        cur = conn.cursor()
+        cur.execute(sql, edit)
+        conn.commit()
+        return cur.lastrowid
+
+    def editTitle(self, conn, edit):
+        sql = """UPDATE BOOK
+                 SET TITLE=?
+                 WHERE rowid=?;"""
+        cur = conn.cursor()
+        cur.execute(sql, edit)
+        conn.commit()
+
+    def editYear(self, conn, edit):
+        sql = """UPDATE BOOK
+                 SET YEAR=?
+                 WHERE rowid=?;"""
+        cur = conn.cursor()
+        cur.execute(sql, edit)
+        conn.commit()
+
+    def getAll(self, conn):
+            sql = """
+                    SELECT rowid,* FROM BOOK;
+                  """
+            cur = conn.cursor()
+            cur.execute(sql)
+            rows = cur.fetchall()
+            return rows
+
+    def getRange(self, conn, range):
+        sql = """
+                SELECT rowid,* from book where rowid between ? and ?;
+              """
+        cur = conn.cursor()
+        cur.execute(sql, range)
+        rows = cur.fetchall()
+        return rows
+
 if __name__ == "__main__":
-    # db = DBHandler("db.txt")
-    # buffer = []
-    # buffer.append({"author":"thuke", "title":"thika","year":1997})
-    # buffer.append({"author":"apples", "title":"nice","year":2000})
-    # db.insertData(buffer)
-    # for x in (db.retrieveData()["data"]):
-    #     print (x["author"], x["title"], x["year"])
+
     db = DBSql()
     conn = db.create_connection("tester.db")
     book = """
-                CREATE TABLE IF NOT EXISTS BOOK (
-                    BOOK_ID INTEGER BOOK ID,
-                    AUTHOR TEXT NOT NULL,
-                    TITLE  TEXT NOT NULL,
-                    YEAR   INTEGER NOT NULL,
-                    PRIMARY KEY (BOOK_ID)
-                );
+            CREATE TABLE IF NOT EXISTS BOOK (
+                AUTHOR TEXT NOT NULL,
+                TITLE  TEXT NOT NULL,
+                YEAR   INTEGER NOT NULL )
            """
     if conn is not None:
         db.create_table(conn, book)
-        print (db.addBook(conn, (2, "tintin", "maga", 1998)))
+        #print (db.addBook(conn, ("one", "shata", 1198)))
+        print (db.getAll(conn))
+        # rows = db.getRange(conn, (6, 8))
+        # print (rows)
+        # print (db.editAuthor(conn, ("bull", "2")))
+        # print (db.editTitle(conn, ("tin tin", "2")))
+        # print (db.editYear(conn, ("2002", "2")))
+        #print (db.deleteBook(conn,("1")))

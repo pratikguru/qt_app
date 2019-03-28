@@ -1,3 +1,11 @@
+"""
+The purpose of this script is to create a PyQt GUI that simulates the functionality of a
+library.
+
+@author: Pratik Gurudatt
+@date  : 26/03/2019
+"""
+import copy
 import time
 import sys
 from       dbHandler       import DBSql
@@ -11,13 +19,13 @@ try:
 except Exception as e:
     print ("Requirement Error! The PyQt Libs are not installed.")
     import os
+import math
 
 
 
 class BookDialog():
     def __init__(self, string, btnString):
         self.miniDialog = QDialog()
-
         self.miniDialog.setGeometry( 500, 500, 400, 300 )
         self.miniDialog.setWindowTitle(str(string))
         self.addButton    = QPushButton(str(btnString), self.miniDialog)
@@ -35,7 +43,6 @@ class BookDialog():
         self.cancelled = False
         self.isMax99999 = QtGui.QRegExpValidator(QtCore.QRegExp("^[0-9]{1,5}$"))
         self.year_lineEdit.setValidator(self.isMax99999)
-
         self.initUI()
 
 
@@ -70,10 +77,19 @@ class BookDialog():
         self.year_lineEdit.setStyleSheet(""" border-radius:10px;""")
 
 
-    def run(self):
+    def runAdd(self):
+
         self.addButton.clicked.connect(self.addBookEmitSignal)
         self.cancelButton.clicked.connect(self.cancelBookEmitSignal)
         self.miniDialog.exec_()
+
+    def runEdit(self):
+        self.addButton.clicked.connect(self.editBookEmitSignal)
+        self.cancelButton.clicked.connect(self.cancelBookEmitSignal)
+        self.miniDialog.exec_()
+
+    def editBookEmitSignal(self):
+        self.miniDialog.close()
 
     def addBookEmitSignal(self):
         safeToQuit = True
@@ -102,20 +118,25 @@ class App(QMainWindow):
         except Exception as e:
             print (e)
             print ("Interface.ui could not be found!")
-        #self.db             = DBHandler("db.txt")
+        #self.db             = DBHandler("db.txt") // Text based database.
         self.db             = DBSql()
         self.rowCount       = 0
-        self.selectedRow    = 0
-        self.selectedColumn = 0
+        self.selectedRow    = None
+        self.selectedColumn = None
         self.pageCount      = 0
         self.currentPage    = 0
         self.addDialog      = BookDialog("Add Book", "Add")
+        self.editDialog     = BookDialog("Edit Book", "Edit")
         self.maxRows        = 0
         self.currentRow     = 0
         self.lowerLimit     = 1
         self.upperLimit     = 4
+        self.filterMode     = False
+        self.filteredResults = []
         self.makeTable()
 
+
+        #Database connection initialization.
         self.conn = self.db.create_connection("tester.db")
         book = """
                 CREATE TABLE IF NOT EXISTS BOOK (
@@ -126,11 +147,20 @@ class App(QMainWindow):
         if not self.conn:
             print ("DB Connection failure!")
             return
+        """ Brief
+            > Fill Combo box.
+            > Add all data.
+            > Set Labels.
+        """
+        years = self.db.getAllYears(self.conn)
+        years = set(years)
+        for year in years:
+            self.year_select.addItem( str(year[0]) )
 
         books = []
         self.maxRows = self.db.getAll(self.conn)
-        self.denom_label.setText(str(int(len(self.maxRows) / 3)))
-        print(len(self.maxRows))
+        self.denom_label.setText(str(int(len(self.maxRows) / 3) ))
+
         rows  = self.db.getAll(self.conn)
         for count, row in enumerate(rows):
             if count == 3:
@@ -142,7 +172,9 @@ class App(QMainWindow):
                 self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem( str(row[x])) )
 
      def run(self):
-
+         """
+            Function for capturing signals emitted by all the input fields of the form.
+         """
          self.add_button.clicked.connect(self.addBook)
          self.edit_button.clicked.connect(self.editBook)
          self.delete_button.clicked.connect(self.deleteBook)
@@ -151,71 +183,162 @@ class App(QMainWindow):
          self.tableWidget.cellClicked.connect(self.rowSelect)
          self.previous_button.clicked.connect(self.previousPage)
          self.next_button.clicked.connect(self.nextPage)
+         self.tableWidget.cellDoubleClicked.connect(self.editBook)
 
      def nextPage(self):
-         if self.currentPage >= len(self.maxRows)/3:
+         """
+            Function for handling the next page functionality.
+
+            On click of the next page, the current page attr is incremented.
+            Based on the current page the slice of elements from the db are extracted.
+            The sliced elements are fed into the table.
+            Limits: (y+1), (y+3)
+            The modes are checked before slicing. Incase of normal mode the above slicing is used.
+            In case of filtering mode, the elements are sliced based on a linear array of 3 sets each.
+         """
+         if self.currentPage >= int(len(self.maxRows)/3):
              print ("Upper limit pages reached.")
              return
-         self.num_label.setText(str(self.currentPage))
-         y = self.currentPage * 3
-         print (((y+1), (y+3)))
-         self.upperLimit = y+1
-         self.lowerLimit = y+3
-         data =  (self.db.getRange(self.conn, ((y+1), (y+3))))
          self.currentPage = self.currentPage + 1
-         self.tableWidget.removeRow(0)
-         self.tableWidget.removeRow(1)
-         self.tableWidget.removeRow(2)
-         self.tableWidget.removeRow(0)
+         self.num_label.setText(str(self.currentPage + 1))
+
+         print (self.currentPage)
+         y = int(self.currentPage * 3)
+         print ("next range")
+         print ((y+1), (y+3))
+         data = None
+         if self.filterMode:
+            print( "FILTER MODE" )
+            fdata = self.filteredResults
+            sets = []
+            i = 0
+            for item in fdata:
+                if i == 0:
+                    sets.append( [] )
+                sets[-1].append(item)
+                i = (i + 1) % 3
+            if self.currentPage < len(sets):
+                data = sets[self.currentPage]
+            else:
+                data = []
+         else:
+             data =  (self.db.getRange(self.conn, ((y+1), (y+3))))
+             print ("NORMAL MODE")
+         print( "currentPage: " + str(self.currentPage))
+         print( "data: " + str(data) )
+         self.clearTable()
          for count, row in enumerate(data):
              if count == 3:
                  return
              rowCount = self.tableWidget.rowCount()
              self.tableWidget.insertRow(rowCount)
              self.tableWidget.setRowHeight(rowCount, 75)
-             for x in range(0, 4):
-                 self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(row[x])))
+             for x in range(0, len(row)):
+                 self.tableWidget.setItem(count, x, QtWidgets.QTableWidgetItem(str(row[x])))
+
 
      def previousPage(self):
-        if self.currentPage <= 0:
+        """
+        A function meant for handling previous button clicks.
+
+        The function listens for previous button clicks, and decrements the page counter.
+        The current page number is used to slice the data from the database.
+        The sliced data is fed into the datatable.
+        The data is sliced based on the mode of the form as stated in nextPage() function.
+        """
+        if self.currentPage == 0:
             print ("Lower limit page reached.")
             return
-
+        print (self.currentPage)
         y = self.currentPage * 3
-        print (((y-2), (y)))
-        self.upperLimit = y-2
-        self.lowerLimit = y
-        data =  (self.db.getRange(self.conn, ((y-2), (y))))
-        self.currentPage = self.currentPage - 1
         self.num_label.setText(str(self.currentPage))
-        self.tableWidget.removeRow(0)
-        self.tableWidget.removeRow(1)
-        self.tableWidget.removeRow(2)
-        self.tableWidget.removeRow(0)
+        self.currentPage = self.currentPage - 1
+        print ("Previous range")
+
+
+        data = None
+        if self.filterMode:
+            print( "FILTER MODE" )
+            fdata = self.filteredResults
+            sets = []
+            i = 0
+            for item in fdata:
+                if i == 0:
+                    sets.append( [] )
+                sets[-1].append(item)
+                i = (i + 1) % 3
+            if self.currentPage < len(sets):
+                data = sets[self.currentPage]
+            else:
+                data = []
+        else:
+            data =  (self.db.getRange(self.conn, ((y-2), (y))))
+            print ((y-2), (y))
+        print( "currentPage: " + str(self.currentPage))
+        print( "data: " + str(data) )
+        #
+        #
+
+        self.clearTable()
         for count, row in enumerate(data):
             if count == 3:
                 return
             rowCount = self.tableWidget.rowCount()
             self.tableWidget.insertRow(rowCount)
             self.tableWidget.setRowHeight(rowCount, 75)
-            for x in range(0, 4):
+            for x in range(0, len(row)):
                 self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(row[x])))
 
+     def clearTable(self):
+         """
+            A function meant for clearing the table widget.
+         """
+         self.tableWidget.removeRow(0)
+         self.tableWidget.removeRow(1)
+         self.tableWidget.removeRow(2)
+         self.tableWidget.removeRow(0)
 
      def rowSelect(self, row, col):
+        """
+        A function meant for setting the selected row and selected column. (Cell)
+        """
         print (row, col)
         self.selectedRow = row
         self.selectedColumn = col
 
      def makeTable(self):
+        """
+        A function meant for making the table with default settings.
+        """
         self.tableWidget.setColumnWidth(0,50)
         for x in range(1, 3):
             self.tableWidget.setColumnWidth(x, 315)
 
      def generateDialog(self, type):
-                 self.addDialog.run()
+        """
+        A function meant for generating the dialog based on the type.
+        """
+        if type == "Add":
+            self.addDialog.runAdd()
+        elif type == "Edit":
+            self.editDialog.runEdit()
+
+
 
      def addBook(self):
+        """
+        A function meant for adding books to the db and the table.
+
+        The function logically adds data to the table and db, the new data
+        has to be fed through an edit box. The saved data is then written
+        to the db.
+
+        The current row count is taken into account, and if there are rows
+        left (<3) the rows are added instantly.
+
+        A complex logic is implemented to add the rows to the table while the
+        above condition holds good.
+        """
         self.generateDialog("Add")
         if self.addDialog.cancelled:
             self.addDialog.cancelled = False
@@ -236,7 +359,6 @@ class App(QMainWindow):
                ]
         print (self.db.addBook(self.conn, (book[1], book[2], book[3])))
         if (self.tableWidget.rowCount() < 3):
-
             rowCount = self.tableWidget.rowCount()
 
             self.tableWidget.insertRow(rowCount)
@@ -244,23 +366,106 @@ class App(QMainWindow):
             for x in range(0, 4):
                 self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(book[x])))
         self.maxRows = self.db.getAll( self.conn )
+
         self.denom_label.setText(str(int(len(self.maxRows) / 3)))
+        self.year_select.clear()
+        self.year_select.addItem("-")
+        for year in self.db.getAllYears(self.conn):
+            self.year_select.addItem(str(year[0]))
 
      def editBook(self):
         print ("Edit book has been called.")
+        self.generateDialog("Edit")
+        if self.editDialog.cancelled:
+            self.editDialog.cancelled = False
+            return
+        if not (self.editDialog.author_edit.text() or self.editDialog.title_lineEdit.text() or self.editDialog.year_lineEdit.text()):
+            return
+        rowId =  (self.tableWidget.item(self.selectedRow, 0).text())
+        book = [
+            str(rowId),
+            str( self.editDialog.author_edit.text()    ),
+            str( self.editDialog.title_lineEdit.text() ),
+            str( self.editDialog.year_lineEdit.text()  )
+        ]
+        if self.editDialog.author_edit.text():
+            self.db.editAuthor(self.conn, (str(self.editDialog.author_edit.text()), str(rowId)))
+            self.tableWidget.setItem(self.selectedRow, 1, QtWidgets.QTableWidgetItem(str(self.editDialog.author_edit.text())))
 
+        if self.editDialog.title_lineEdit.text():
+            self.db.editTitle(self.conn, (str(self.editDialog.title_lineEdit.text()), str(rowId)))
+            self.tableWidget.setItem(self.selectedRow, 2, QtWidgets.QTableWidgetItem(str(self.editDialog.title_lineEdit.text())))
+
+        if self.editDialog.year_lineEdit.text():
+            self.db.editYear(self.conn, (str(self.editDialog.year_lineEdit.text()), str(rowId)))
+            self.tableWidget.setItem(self.selectedRow, 3, QtWidgets.QTableWidgetItem(str(self.editDialog.year_lineEdit.text())))
 
      def deleteBook(self):
          print ("Delete book has been called.")
+         if self.selectedRow is None:
+             print ("Please select something...")
+             return
          rowToBeDeleted =  (self.tableWidget.item(self.selectedRow, 0).text())
-         self.db.deleteBook(self.conn, (str(rowToBeDeleted)))
+
+         print (rowToBeDeleted)
+         self.db.deleteBook(self.conn, (str(rowToBeDeleted),))
          self.tableWidget.removeRow(self.selectedRow)
+         self.maxRows = self.db.getAll(self.conn)
+         self.selectedRow = None
+         self.selectedColumn = None
+
      def filterBooks(self):
+         self.filterMode = True
+         self.currentPage = 0
          print ("Filter book has been called.")
+         self.filteredResults = []
+
+         data = None
+         if len(self.author_edit.text()) > 1 and len(self.title_edit.text()) > 1 and self.year_select.currentText() != "-":
+             print ("All Filters applied.")
+             data = self.db.filterBook(self.conn, (self.author_edit.text(), self.title_edit.text(), self.year_select.currentText()))
+         elif len(self.author_edit.text()) > 1  and len(self.title_edit.text()) > 1:
+             print("Author title filter.")
+             data = self.db.filterBookAT(self.conn, (self.author_edit.text(), self.title_edit.text()))
+         elif len(self.author_edit.text()) > 1 and (self.year_select.currentText() != "-"):
+             print ("Author year filter.")
+             data = self.db.filterBookAY(self.conn, (self.author_edit.text(), self.year_select.currentText()))
+         elif len(self.title_edit.text()) > 1 and self.year_select.currentText() != "-":
+             print ("Title year filter.")
+             data = self.db.filterBookYT(self.conn, (self.title_edit.text(), self.year_select.currentText()))
+         elif len(self.title_edit.text()) > 1 :
+             print ("Title Filter only.")
+             data = self.db.filterByTitle(self.conn, (self.title_edit.text(), ))
+         elif (self.year_select.currentText() != "-"):
+             print ("Year Filter only.")
+             data = self.db.filterByYear(self.conn, (self.year_select.currentText(), ))
+         elif len(self.author_edit.text()) > 1:
+             print ("Author Filter only.")
+             data = self.db.filterByAuthor(self.conn, (self.author_edit.text(), ))
+         if data is None:
+             return
+         self.filteredResults = data
+         self.maxRows = data
+         print (data)
+         self.denom_label.setText(str(math.floor(len(self.maxRows)/3)))
+         self.clearTable()
+         for count, row in enumerate(data):
+             if count == 3:
+                 return
+             rowCount = self.tableWidget.rowCount()
+             self.tableWidget.insertRow(rowCount)
+             self.tableWidget.setRowHeight(rowCount, 75)
+             for x in range(0, 4):
+                 self.tableWidget.setItem(rowCount, x, QtWidgets.QTableWidgetItem(str(row[x])))
 
      def clearFilter(self):
+         self.filterMode = False
          print ("Clear filter has been called.")
-
+         self.author_edit.clear()
+         self.title_edit.clear()
+         self.maxRows = self.db.getAll(self.conn)
+         self.denom_label.setText(str(math.floor(len(self.maxRows)/3)))
+         self.currentPage = 0
 def main():
     app = QApplication(sys.argv)
     widget = App()
